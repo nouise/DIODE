@@ -6,3 +6,5 @@ __pycache__
 *.zip
 *.pkl
 *.pyc
+knowledge_distillation/yolov3-master/runs
+knowledge_distillation/yolov3-master/runs_pretrained_backbone
