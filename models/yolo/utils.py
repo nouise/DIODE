@@ -449,6 +449,10 @@ def compute_loss(p, targets, model):  # predictions, targets, model
 def build_targets(model, targets):
     # targets = [image, class, x, y, w, h]
 
+    device = next(model.parameters()).device
+    targets = targets.to(device)
+    iou_t = torch.tensor(model.hyp['iou_t'], device=device)
+
     nt = len(targets)
     tcls, tbox, indices, av = [], [], [], []
     multi_gpu = type(model) in (nn.parallel.DataParallel, nn.parallel.DistributedDataParallel)
@@ -468,7 +472,7 @@ def build_targets(model, targets):
 
             if use_all_anchors:
                 na = len(anchor_vec)  # number of anchors
-                a = torch.arange(na).view((-1, 1)).repeat([1, nt]).view(-1)
+                a = torch.arange(na, device=device).view((-1, 1)).repeat([1, nt]).view(-1)
                 t = targets.repeat([na, 1])
                 gwh = gwh.repeat([na, 1])
             else:  # use best anchor only
@@ -476,7 +480,7 @@ def build_targets(model, targets):
 
             # reject anchors below iou_thres (OPTIONAL, increases P, lowers R)
             if reject:
-                j = iou.view(-1) > model.hyp['iou_t']  # iou threshold hyperparameter
+                j = iou.view(-1) > iou_t  # iou threshold hyperparameter
                 t, a, gwh = t[j], a[j], gwh[j]
 
         # Indices

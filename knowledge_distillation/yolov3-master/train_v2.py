@@ -22,6 +22,34 @@ wdir = 'weights' + os.sep  # weights dir
 last = wdir + 'last.pt'
 best = wdir + 'best.pt'
 results_file = 'results.txt'
+def print_model_summary(model, nc=80):
+    print(f"\n{'Layer':>5} {'from':>12} {'n':>3} {'params':>12}  {'module':>30} {'arguments':>30}")
+    
+    total_params = 0
+    # 模拟 YOLOv5 风格的输出格式
+    for i, m in enumerate(model.module_list):
+        m_type = type(m[0]).__name__ if isinstance(m, torch.nn.Sequential) else type(m).__name__
+        n_params = sum(p.numel() for p in m.parameters())
+        total_params += n_params
+        
+        # 提取参数信息 (如输入通道、输出通道、卷积核大小等)
+        args = []
+        for sub_m in m.modules():
+            if isinstance(sub_m, torch.nn.Conv2d):
+                args = [sub_m.in_channels, sub_m.out_channels, sub_m.kernel_size[0], sub_m.stride[0]]
+                break
+            elif isinstance(sub_m, torch.nn.Upsample):
+                args = [None, int(sub_m.scale_factor), sub_m.mode]
+                break
+        
+        # 简化的 'from' 逻辑：通常是上一层 -1，或者是 Concat 层
+        from_idx = -1 
+        
+        print(f"{i:5d} {str(from_idx):>12} {1:3d} {n_params:12d}  {m_type:30} {str(args):30}")
+
+    print(f"\nModel Summary: {len(list(model.modules()))} layers, {total_params} parameters")
+    print(f"Overriding model.yaml nc=80 with nc={nc}\n")
+
 
 # Hyperparameters
 hyp = {'giou': 3.54,  # giou loss gain
@@ -116,37 +144,39 @@ def train(hyp):
     best_fitness = 0.0
     attempt_download(weights)
     if weights.endswith('.pt'):  # pytorch format
-        # possible weights are '*.pt', 'yolov3-spp.pt', 'yolov3-tiny.pt' etc.
-        ckpt = torch.load(weights, map_location=device,weights_only=False)
+        ckpt = torch.load(weights, map_location=device, weights_only=False)
+        state_dict = ckpt['model']
+        
+        # 1. 定义 Backbone 的范围（0-74层）
+        backbone_end_layer = 75  
+        
+        # 生成白名单：只允许 module_list.0. 到 module_list.74. 开头的参数
+        # 这样可以防止任何 Neck 或 Head 的权重（如 Layer 75 之后的 Conv）被意外加载
+        allow_prefixes = [f'module_list.{i}.' for i in range(backbone_end_layer)]
+        
+        pretrained_dict = {}
+        for k, v in state_dict.items():
+            # 严格检查：必须在白名单内，且名称和形状完全匹配
+            if any(k.startswith(p) for p in allow_prefixes):
+                if k in model.state_dict() and model.state_dict()[k].numel() == v.numel():
+                    pretrained_dict[k] = v
+        
+        # 2. 加载权重
+        # strict=False 是必须的，因为我们故意漏掉了所有的 Neck/Head 权重
+        model.load_state_dict(pretrained_dict, strict=False)
 
-        # load model
-        try:
-            ckpt['model'] = {k: v for k, v in ckpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
-            model.load_state_dict(ckpt['model'], strict=False)
-        except KeyError as e:
-            s = "%s is not compatible with %s. Specify --weights '' or specify a --cfg compatible with %s. " \
-                "See https://github.com/ultralytics/yolov3/issues/657" % (opt.weights, opt.cfg, opt.weights)
-            raise KeyError(s) from e
-
-        # load optimizer
-        if ckpt['optimizer'] is not None:
-            optimizer.load_state_dict(ckpt['optimizer'])
-            best_fitness = ckpt['best_fitness']
-
-        # load results
-        if ckpt.get('training_results') is not None:
-            with open(results_file, 'w') as file:
-                file.write(ckpt['training_results'])  # write results.txt
-
-        # epochs
-        start_epoch = ckpt['epoch'] + 1
-        if epochs < start_epoch:
-            print('%s has been trained for %g epochs. Fine-tuning for %g additional epochs.' %
-                  (opt.weights, ckpt['epoch'], epochs))
-            epochs += ckpt['epoch']  # finetune additional epochs
-
-        del ckpt
-
+        # 3. 强制重置超参数和优化器（实现随机初始化效果）
+        start_epoch = 0
+        best_fitness = 0.0
+        # 注意：不要执行 optimizer.load_state_dict
+        
+        print(f"Strictly transferred {len(pretrained_dict)} items from {weights} (Layers 0-74 only)")
+        
+        # 释放内存
+        del ckpt, state_dict, pretrained_dict
+        
+        # 打印确认
+        print_model_summary(model, nc=20)
     elif len(weights) > 0:  # darknet format
         # possible weights are '*.weights', 'yolov3-tiny.conv.15',  'darknet53.conv.74' etc.
         load_darknet_weights(model, weights)
@@ -387,8 +417,8 @@ if __name__ == '__main__':
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
     parser.add_argument('--weights', type=str, default='weights/yolov3-spp-ultralytics.pt', help='initial weights path')
-    parser.add_argument('--name', default='exp_syn_512', help='renames results.txt to results_name.txt if supplied')
-    parser.add_argument('--project', type=str, default='runs', help='project directory to save results (default: runs)')
+    parser.add_argument('--name', default='exp_random', help='renames results.txt to results_name.txt if supplied')
+    parser.add_argument('--project', type=str, default='runs_pretrained_backbone', help='project directory to save results (default: runs)')
     parser.add_argument('--out', type=str, default='', help='optional override for project directory')
     parser.add_argument('--device', default='', help='device id (i.e. 0 or 0,1 or cpu)')
     parser.add_argument('--nw', type=int, default=8, help='number of dataloader workers')

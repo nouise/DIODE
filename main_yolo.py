@@ -45,8 +45,8 @@ def set_all_seeds(seeds):
 
 def run(args):
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
-    net = load_model(cfg='./models/yolo/cfg/yolov3-spp.cfg', weights='./models/yolo/yolov3-spp-ultralytics.pt').to(device)
-    net_verifier = load_model(cfg='./models/yolo/cfg/yolov3-tiny.cfg', weights='./models/yolo/yolov3-tiny.pt').to(device)
+    net = load_model(cfg='/data1/home/ypliu/DIODE/knowledge_distillation/yolov3-master/cfg/yolov3-spp-voc.cfg', weights='/data1/home/ypliu/DIODE/knowledge_distillation/yolov3-master/runs/exp/weights/last.pt').to(device)
+    net_verifier = load_model(cfg='/data1/home/ypliu/DIODE/knowledge_distillation/yolov3-master/cfg/yolov3-spp-voc.cfg', weights='/data1/home/ypliu/DIODE/knowledge_distillation/yolov3-master/runs/exp/weights/last.pt').to(device)
     imgs, targets, imgspaths = load_batch(args.train_txt_path, args.bs, args.resolution[0], args.shuffle)
     net.eval() 
     net_verifier.eval()

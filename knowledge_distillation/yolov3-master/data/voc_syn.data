@@ -1,0 +1,4 @@
+train=data/voc/train_syn.txt
+valid=data/voc/val.txt
+names=data/voc.names
+classes=20

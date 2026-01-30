@@ -14,19 +14,19 @@
 
 now=$(date +"day_%m_%d_%Y_time_%H_%M_%S")
 echo "CURDATETIME: ${now}"
-export CUDA_VISIBLE_DEVICES="auto"
-source scripts/auto_gpu.sh
+export CUDA_VISIBLE_DEVICES="5"
+# source scripts/auto_gpu.sh
 echo "${CUDA_VISIBLE_DEVICES}"
 
 ##############################################################
 # This command generates 128 images of resolution 160x160
 ##############################################################
 
-rootlocation="./diode_results/"
-python -u main_yolo.py --resolution=160 --bs=128 \
+rootlocation="./diode_results_74/"
+python -u main_yolo.py --resolution=160 --bs=74 \
 --jitter=20 --do_flip --rand_brightness --rand_contrast --random_erase \
 --path="${rootlocation}/${now}_res160" \
---train_txt_path="/tmp/onebox/manifest.txt" \
+--train_txt_path="/data1/home/ypliu/selected_voc_images_74.txt" \
 --iterations=2500 \
 --r_feature=0.1 --p_norm=2 --alpha-mean=1.0 --alpha-var=1.0 --num_layers=-1 \
 --first_bn_coef=2.0 \

@@ -43,8 +43,15 @@ hyp = {'giou': 3.54,  # giou loss gain
 def load_model(cfg, weights, img_size=320):
     """Load a YoloV3 model matching architecture `cfg` with parameters `weights`."""
     net = Darknet(cfg, img_size)
-    net.load_state_dict(torch.load(weights, map_location=torch.device('cpu'))['model'])
-    net.nc = 80
+    net.load_state_dict(torch.load(weights,weights_only=False)['model'],strict=False)
+    # Get number of classes from cfg
+    # module_defs = parse_model_cfg(cfg)
+    # nc = 0
+    # for mdef in module_defs:
+    #     if 'classes' in mdef:
+    #         nc = mdef['classes']
+    #         break
+    net.nc = 20
     net.arc = 'default'
     net.hyp = hyp
     net.gr = 0.0  # giou loss ratio (obj_loss = 1.0 or giou)
@@ -81,9 +88,9 @@ def inference(net, imgs, targets, nms_params={"iou_thres":0.5, "conf_thres":0.01
         output = non_max_suppression(preds, nms_params["conf_thres"], nms_params["iou_thres"], classes=None, agnostic=False)
 
     # Get colors + names of classes
-    with open("./models/yolo/names.pkl", "rb") as f:
+    with open("/data1/home/ypliu/DIODE/models/yolo/names.pkl", "rb") as f:
         names = pickle.load(f)
-    with open("./models/yolo/colors.pkl", "rb") as f:
+    with open("/data1/home/ypliu/DIODE/models/yolo/colors.pkl", "rb") as f:
         colors = pickle.load(f)
 
     # Plot bounding boxes on each image
@@ -330,9 +337,9 @@ def draw_targets(imgs, targets):
     """Draw `targets` bboxes on `imgs`."""
     batch_size = len(imgs)
     # Get colors + names of classes
-    with open("./models/yolo/names.pkl", "rb") as f:
+    with open("/data1/home/ypliu/DIODE/models/yolo/names.pkl", "rb") as f:
         names = pickle.load(f)
-    with open("./models/yolo/colors.pkl", "rb") as f:
+    with open("/data1/home/ypliu/DIODE/models/yolo/colors.pkl", "rb") as f:
         colors = pickle.load(f)
 
     # Draw boxes

@@ -276,7 +276,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         n = len(self.img_files)
         assert n > 0, 'No images found in %s. See %s' % (path, help_url)
-        bi = np.floor(np.arange(n) / batch_size).astype(np.int)  # batch index
+        bi = np.floor(np.arange(n) / batch_size).astype(np.int32)  # batch index
         nb = bi[-1] + 1  # number of batches
 
         self.n = n  # number of images
@@ -325,7 +325,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 elif mini > 1:
                     shapes[i] = [1, 1 / mini]
 
-            self.batch_shapes = np.ceil(np.array(shapes) * img_size / 32. + pad).astype(np.int) * 32
+            self.batch_shapes = np.ceil(np.array(shapes) * img_size / 32. + pad).astype(np.int32) * 32
 
         # Cache labels
         self.imgs = [None] * n
@@ -405,7 +405,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         assert nf > 0 or n == 20288, 'No labels found in %s. See %s' % (os.path.dirname(file) + os.sep, help_url)
         if not labels_loaded and n > 1000:
             print('Saving labels to %s for faster future loading' % np_labels_path)
-            np.save(np_labels_path, self.labels)  # save for next time
+            # Save as an object array to allow variable-length label arrays per image
+            np.save(np_labels_path, np.array(self.labels, dtype=object))  # save for next time
 
         # Cache images into memory for faster training (WARNING: large datasets may exceed system RAM)
         if cache_images:  # if training

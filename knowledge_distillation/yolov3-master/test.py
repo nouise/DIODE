@@ -43,7 +43,7 @@ def test(cfg,
         # Load weights
         attempt_download(weights)
         if weights.endswith('.pt'):  # pytorch format
-            model.load_state_dict(torch.load(weights, map_location=device)['model'])
+            model.load_state_dict(torch.load(weights, map_location=device,weights_only=False)['model'])
         else:  # darknet format
             load_darknet_weights(model, weights)
 
@@ -64,9 +64,10 @@ def test(cfg,
     path = data['valid']  # path to test images
     names = load_classes(data['names'])  # class names
     iouv = torch.linspace(0.5, 0.95, 10).to(device)  # iou vector for mAP@0.5:0.95
-    iouv = iouv[0].view(1)  # comment for mAP@0.5:0.95
+    # iouv = iouv[0].view(1)  # comment for mAP@0.5:0.95
     niou = iouv.numel()
-
+    if path.startswith("data"):
+        path=path.replace("data","/data1/home/ypliu/DIODE/knowledge_distillation/yolov3-master/data")  # --- IGNORE ---
     # Dataloader
     if dataloader is None:
         dataset = LoadImagesAndLabels(path, imgsz, batch_size, rect=True, single_cls=single_cls, pad=0.5)
@@ -182,8 +183,14 @@ def test(cfg,
     stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
     if len(stats):
         p, r, ap, f1, ap_class = ap_per_class(*stats)
+        
+        # --- 【修改开始】 ---
+        ap95 = 0.0
         if niou > 1:
+            ap95 = ap[:, 9].mean() # 获取原生计算的 AP@0.95
             p, r, ap, f1 = p[:, 0], r[:, 0], ap.mean(1), ap[:, 0]  # [P, R, AP@0.5:0.95, AP@0.5]
+        # --- 【修改结束】 ---
+            
         mp, mr, map, mf1 = p.mean(), r.mean(), ap.mean(), f1.mean()
         nt = np.bincount(stats[3].astype(np.int64), minlength=nc)  # number of targets per class
     else:
@@ -201,7 +208,7 @@ def test(cfg,
     # Print speeds
     if verbose or save_json:
         t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (imgsz, imgsz, batch_size)  # tuple
-        print('Speed: %.1f/%.1f/%.1f ms inference/NMS/total per %gx%g image at batch-size %g' % t)
+        print(f'Speed: {t[0]:.1f}/{t[1]:.1f}/{t[2]:.1f} ms inference/NMS/total per {t[3]}x{t[4]} image at batch-size {t[5]}')
 
     # Save JSON
     if save_json and map and len(jdict):
@@ -210,23 +217,50 @@ def test(cfg,
         with open('results.json', 'w') as file:
             json.dump(jdict, file)
 
-        try:
-            from pycocotools.coco import COCO
-            from pycocotools.cocoeval import COCOeval
+        if 'coco' in data.lower():
+            try:
+                from pycocotools.coco import COCO
+                from pycocotools.cocoeval import COCOeval
 
-            # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocoEvalDemo.ipynb
-            cocoGt = COCO(glob.glob('../coco/annotations/instances_val*.json')[0])  # initialize COCO ground truth api
-            cocoDt = cocoGt.loadRes('results.json')  # initialize COCO pred api
+                # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocoEvalDemo.ipynb
+                cocoGt = COCO(glob.glob('../coco/annotations/instances_val*.json')[0])  # initialize COCO ground truth api
+                cocoDt = cocoGt.loadRes('results.json')  # initialize COCO pred api
 
-            cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
-            cocoEval.params.imgIds = imgIds  # [:32]  # only evaluate these images
-            cocoEval.evaluate()
-            cocoEval.accumulate()
-            cocoEval.summarize()
-            # mf1, map = cocoEval.stats[:2]  # update to pycocotools results (mAP@0.5:0.95, mAP@0.5)
-        except:
-            print('WARNING: pycocotools must be installed with numpy==1.17 to run correctly. '
-                  'See https://github.com/cocodataset/cocoapi/issues/356')
+                cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
+                cocoEval.params.imgIds = imgIds  # [:32]  # only evaluate these images
+                cocoEval.evaluate()
+                cocoEval.accumulate()
+                cocoEval.summarize()
+                
+                # --- 【修改开始】 添加详细指标打印 ---
+                print(f"\n{'='*20} 全面指标报告 {'='*20}")
+                # 原生计算的 AP95
+                print(f"AP@0.95 (Native) : {ap95:.4f}") 
+                
+                # pycocotools 计算的指标
+                # stats[0]=mAP, stats[1]=AP50, stats[2]=AP75
+                # stats[3]=APs, stats[4]=APm, stats[5]=APl
+                print(f"mAP (0.5:0.95)   : {cocoEval.stats[0]:.4f}")
+                print(f"AP@0.50          : {cocoEval.stats[1]:.4f}")
+                print(f"AP@0.75          : {cocoEval.stats[2]:.4f}")
+                print(f"APs (Small)      : {cocoEval.stats[3]:.4f}")
+                print(f"APm (Medium)     : {cocoEval.stats[4]:.4f}")
+                print(f"APl (Large)      : {cocoEval.stats[5]:.4f}")
+                print(f"{'='*54}\n")
+                # --- 【修改结束】 ---
+                
+            except Exception as e:
+                print(f'WARNING: pycocotools error: {e}')
+        else:
+            print("Skipping pycocotools evaluation for non-COCO dataset (e.g., VOC). Using native mAP calculation.")
+            # 可以在这里打印原生计算的指标
+            print(f"\n{'='*20} 原生计算指标报告 {'='*20}")
+            print(f"mAP@0.5          : {map:.4f}")
+            print(f"AP@0.95 (Native) : {ap95:.4f}")
+            print(f"Precision        : {mp:.4f}")
+            print(f"Recall           : {mr:.4f}")
+            print(f"F1               : {mf1:.4f}")
+            print(f"{'='*54}\n")
 
     # Return results
     num_samples = len(dataloader)
@@ -239,16 +273,18 @@ def test(cfg,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='test.py')
-    parser.add_argument('--cfg', type=str, default='cfg/yolov3-spp.cfg', help='*.cfg path')
-    parser.add_argument('--data', type=str, default='data/coco2014.data', help='*.data path')
-    parser.add_argument('--weights', type=str, default='weights/yolov3-spp-ultralytics.pt', help='weights path')
+    parser.add_argument('--cfg', type=str, default='cfg/yolov3-spp-voc.cfg', help='*.cfg path')
+    parser.add_argument('--data', type=str, default='data/voc_v3.data', help='*.data path')
+    parser.add_argument('--weights', type=str, default='/data1/home/ypliu/DIODE/knowledge_distillation/yolov3-master/runs/exp/weights/best.pt', help='weights path')
+    # parser.add_argument('--weights',type=str, default='/data1/home/ypliu/DIODE/knowledge_distillation/yolov3-master/runs/exp/weights/last.pt', help='weights path')
+    # parser.add_argument('--weights',type=str, default='/data1/home/ypliu/DIODE/knowledge_distillation/yolov3-master/runs_pretrained_backbone/exp_syn_512/weights/best_exp_syn_512.pt', help='weights path')
     parser.add_argument('--batch-size', type=int, default=16, help='size of each image batch')
     parser.add_argument('--img-size', type=int, default=512, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.001, help='object confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.6, help='IOU threshold for NMS')
     parser.add_argument('--save-json', action='store_true', help='save a cocoapi-compatible JSON results file')
     parser.add_argument('--task', default='test', help="'test', 'study', 'benchmark'")
-    parser.add_argument('--device', default='', help='device id (i.e. 0 or 0,1) or cpu')
+    parser.add_argument('--device', default='1', help='device id (i.e. 0 or 0,1) or cpu')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
     parser.add_argument('--augment', action='store_true', help='augmented inference')
     parser.add_argument('--no-pycocotools', action='store_true', help='do not evaluate using pycocotools')

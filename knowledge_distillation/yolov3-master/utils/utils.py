@@ -66,7 +66,7 @@ def labels_to_class_weights(labels, nc=80):
         return torch.Tensor()
 
     labels = np.concatenate(labels, 0)  # labels.shape = (866643, 5) for COCO
-    classes = labels[:, 0].astype(np.int)  # labels = [class xywh]
+    classes = labels[:, 0].astype(np.int32)  # labels = [class xywh]
     weights = np.bincount(classes, minlength=nc)  # occurences per class
 
     # Prepend gridpoint count (for uCE trianing)
@@ -430,7 +430,8 @@ def build_targets(p, targets, model):
         anchors = model.module.module_list[j].anchor_vec if multi_gpu else model.module_list[j].anchor_vec
         gain[2:] = torch.tensor(p[i].shape)[[3, 2, 3, 2]]  # xyxy gain
         na = anchors.shape[0]  # number of anchors
-        at = torch.arange(na).view(na, 1).repeat(1, nt)  # anchor tensor, same as .repeat_interleave(nt)
+        # create anchor tensor on same device as targets to avoid CPU/CUDA indexing mismatch
+        at = torch.arange(na, device=targets.device).view(na, 1).repeat(1, nt)  # anchor tensor
 
         # Match targets to anchors
         a, t, offsets = [], targets * gain, 0
@@ -578,7 +579,7 @@ def print_model_biases(model):
 
 def strip_optimizer(f='weights/best.pt'):  # from utils.utils import *; strip_optimizer()
     # Strip optimizer from *.pt files for lighter files (reduced by 2/3 size)
-    x = torch.load(f, map_location=torch.device('cpu'))
+    x = torch.load(f, map_location=torch.device('cpu'),weights_only=False)
     x['optimizer'] = None
     print('Optimizer stripped from %s' % f)
     torch.save(x, f)
@@ -801,22 +802,34 @@ def output_to_target(output, width, height):
     Convert a YOLO model output to target format
     [batch_id, class_id, x, y, w, h, conf]
     """
+    # Normalize different output types: tensor, list of tensors, or numpy arrays
     if isinstance(output, torch.Tensor):
         output = output.cpu().numpy()
 
     targets = []
     for i, o in enumerate(output):
-        if o is not None:
-            for pred in o:
-                box = pred[:4]
-                w = (box[2] - box[0]) / width
-                h = (box[3] - box[1]) / height
-                x = box[0] / width + w / 2
-                y = box[1] / height + h / 2
-                conf = pred[4]
-                cls = int(pred[5])
+        if o is None:
+            continue
 
-                targets.append([i, cls, x, y, w, h, conf])
+        # If o is a torch tensor on CUDA, move to CPU and convert to numpy
+        if isinstance(o, torch.Tensor):
+            if o.device.type != 'cpu':
+                o = o.cpu()
+            o = o.numpy()
+
+        # Now o should be an iterable of detections in numpy format
+        for pred in o:
+            # pred may be a numpy array or list-like
+            pred = np.array(pred, dtype=float)
+            box = pred[:4]
+            w = (box[2] - box[0]) / width
+            h = (box[3] - box[1]) / height
+            x = box[0] / width + w / 2
+            y = box[1] / height + h / 2
+            conf = float(pred[4])
+            cls = int(pred[5])
+
+            targets.append([i, cls, x, y, w, h, conf])
 
     return np.array(targets)
 

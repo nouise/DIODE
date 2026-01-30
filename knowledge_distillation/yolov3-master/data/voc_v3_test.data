@@ -1,0 +1,4 @@
+train=DIODE/knowledge_distillation/yolov3-master/data/voc/train.txt
+valid=DIODE/knowledge_distillation/yolov3-master/data/voc/val.txt
+names=DIODE/knowledge_distillation/yolov3-master/data/voc.names
+classes=20

@@ -1,0 +1,4 @@
+train=data/voc/voc_random_328.txt
+valid=data/voc/val.txt
+names=data/voc.names
+classes=20
