@@ -61,16 +61,27 @@ def load_model(cfg, weights, img_size=320):
 
 
 def load_batch(train_txt_path, batch_size=64, img_size=320, shuffle=False):
-    """Loads a batch of data with `batch_size` items from dataset `train_txt_path`."""
-    dataset = LoadImagesAndLabels(train_txt_path, img_size, batch_size,
-                augment=False, hyp=hyp, rect=False, cache_images=False,
-                cache_labels=False, single_cls=False)
-    dataloader = torch.utils.data.DataLoader(dataset,
-                    batch_size=batch_size, num_workers=0,
-                    shuffle=shuffle, pin_memory=False,
-                    collate_fn=dataset.collate_fn)
-    imgs, targets, imgspaths, _ = next(iter(dataloader))
-    return imgs.float()/255.0, targets, imgspaths
+    """Builds a dataloader for dataset `train_txt_path` with `batch_size` items per batch."""
+    dataset = LoadImagesAndLabels(
+        train_txt_path,
+        img_size,
+        batch_size,
+        augment=False,
+        hyp=hyp,
+        rect=False,
+        cache_images=False,
+        cache_labels=False,
+        single_cls=False,
+    )
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        num_workers=0,
+        shuffle=shuffle,
+        pin_memory=False,
+        collate_fn=dataset.collate_fn,
+    )
+    return dataloader
 
 
 def inference(net, imgs, targets, nms_params={"iou_thres":0.5, "conf_thres":0.01}):

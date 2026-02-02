@@ -19,27 +19,62 @@ export CUDA_VISIBLE_DEVICES="5"
 echo "${CUDA_VISIBLE_DEVICES}"
 
 ##############################################################
-# This command generates 128 images of resolution 160x160
+# This command generates 128 images of resolution 512x512
 ##############################################################
 
-rootlocation="./diode_results_74/"
-python -u main_yolo.py --resolution=160 --bs=74 \
---jitter=20 --do_flip --rand_brightness --rand_contrast --random_erase \
---path="${rootlocation}/${now}_res160" \
---train_txt_path="/data1/home/ypliu/selected_voc_images_74.txt" \
---iterations=2500 \
---r_feature=0.1 --p_norm=2 --alpha-mean=1.0 --alpha-var=1.0 --num_layers=-1 \
---first_bn_coef=2.0 \
---main_loss_multiplier=0.5 \
+rootlocation="/data1/home/ypliu/DIODE/syn_data_result"
+# python -u main_yolo_v2.py --resolution=512 --bs=4 \
+# --jitter=20 --do_flip --rand_brightness --rand_contrast --random_erase \
+# --path="${rootlocation}/${now}_res512" \
+# --train_txt_path="/data1/home/ypliu/selected_voc_images_74.txt" \
+# --iterations=5000 \
+# --r_feature=0.01 --p_norm=2 --alpha-mean=1.0 --alpha-var=1.0 --num_layers=-1 \
+# --first_bn_coef=2.0 \
+# --main_loss_multiplier=1.5 \
+# --alpha_img_stats=0.0 \
+# --tv_l1=0.0 \
+# --tv_l2=0.0 \
+# --lr=0.1 --min_lr=0.0 --beta1=0.0 --beta2=0.0 \
+# --wd=0.0 \
+# --save_every=100 --display_every=100 \
+# --seeds="0,0,23456" \
+# --init_scale=1.0 --init_bias=0.0 --nms_conf_thres=0.05 --alpha-ssim=0.00 --save-coco
+#fintune
+# python -u main_yolo_v2.py --resolution=512 --bs=9 \
+# --jitter=40 --do_flip --rand_brightness --rand_contrast --random_erase \
+# --path="${rootlocation}/${now}_res512_finetune" \
+# --train_txt_path="/data1/home/ypliu/selected_voc_images_74.txt" \
+# --iterations=1500 \
+# --r_feature=0.1 --p_norm=2 --alpha-mean=1.0 --alpha-var=1.0 --num_layers=51 \
+# --first_bn_coef=0.0 \
+# --main_loss_multiplier=1.0 \
+# --alpha_img_stats=0.0 \
+# --tv_l1=75.0 \
+# --tv_l2=0.0 \
+# --lr=0.002 --min_lr=0.0005 \
+# --wd=0.0 \
+# --save_every=100 \
+# --seeds="0,0,23456" \
+# --display_every=100 --init_scale=1.0 --init_bias=0.0 --nms_conf_thres=0.1 --alpha-ssim=0.0 --save-coco --real_mixin_alpha=1.0
+#fintune paramterts mores
+python -u main_yolo_v2.py --resolution=512 --bs=16 \
+--jitter=40 --do_flip --rand_brightness --rand_contrast --random_erase \
+--path="${rootlocation}/${now}_res512_finetune" \
+--train_txt_path="/data1/home/ypliu/DIODE/random_328.txt" \
+--iterations=1500 \
+--r_feature=0.01 --p_norm=2 --alpha-mean=1.0 --alpha-var=1.0 --num_layers=51 \
+--first_bn_coef=0.0 \
+--main_loss_multiplier=1.0 \
 --alpha_img_stats=0.0 \
---tv_l1=75.0 \
+--tv_l1=0.0 \
 --tv_l2=0.0 \
---lr=0.2 --min_lr=0.0 --beta1=0.0 --beta2=0.0 \
+--lr=0.02 --min_lr=0.0005 \
 --wd=0.0 \
---save_every=100 --display_every=100 \
+--save_every=100 \
 --seeds="0,0,23456" \
---init_scale=1.0 --init_bias=0.0 --nms_conf_thres=0.05 --alpha-ssim=0.00 --save-coco
-
+--display_every=100 --init_scale=1.0 --init_bias=0.0 --nms_conf_thres=0.1 --alpha-ssim=0.0 --save-coco --real_mixin_alpha=1.0 \
+--box-sampler --box-sampler-warmup=300 --box-sampler-conf=0.3 \
+--box-sampler-overlap-iou=0.35 --box-sampler-minarea=0.01 --box-sampler-maxarea=0.85 --box-sampler-earlyexit=2800
 ##############################################################
 # to enable fp-sampling add the following args to above:
 # --box-sampler --box-sampler-warmup=800 --box-sampler-conf=0.2 \
@@ -57,7 +92,7 @@ python -u main_yolo.py --resolution=160 --bs=74 \
 # # WARNING: imagemagick must be installed before the next line is run
 # # to install imagemagick: $sudo apt-get update && sudo apt-get install -y imagemagick 
 # find ${rootlocation}/${now}_res160/coco/images -name '*.png' | xargs -I {} convert {} -resize 320x320 {} 
-
+# find /data1/home/ypliu/merged_coco_random/images -name '*.jpg' /data1/home/ypliu/DIODE/random_328.txt
 # python main_yolo.py --resolution=320 --bs=96 \
 # --jitter=40 --do_flip --rand_brightness --rand_contrast --random_erase \
 # --path="${rootlocation}/${now}_res320" \

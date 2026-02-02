@@ -8,3 +8,7 @@ __pycache__
 *.pyc
 knowledge_distillation/yolov3-master/runs
 knowledge_distillation/yolov3-master/runs_pretrained_backbone
+
+result/
+syn_data_result/
+diode_results_74/

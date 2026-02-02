@@ -38,7 +38,47 @@ def lr_policy(lr_fn):
             param_group['lr'] = lr
 
     return _alr
+def generate_fg_mask(inputs, targets):
+    """
+    根据 targets (batch_idx, class, x_c, y_c, w, h) 生成前景掩码
+    targets 坐标假设为 0-1 标准化相对坐标
+    """
+    mask = torch.zeros_like(inputs)
+    bs, _, h, w = inputs.shape
+    
+    # 转换为像素坐标
+    # targets shape: [N, 6] -> (batch_idx, class, x, y, w, h)
+    if targets.shape[0] == 0:
+        return mask
 
+    # 提取坐标并反归一化
+    # 确保 targets 在 CPU 上进行索引操作，或者使用 torch 操作
+    # 这里为了兼容性使用循环，对于 batch size < 64 速度影响可忽略
+    # 若追求极致速度可用纯 Tensor 操作，但容易因 float 精度导致 1px 误差
+    
+    for t in targets:
+        b_idx = int(t[0])
+        # 限制 batch 索引防止越界
+        if b_idx >= bs: continue
+
+        x_c, y_c, bw, bh = t[2], t[3], t[4], t[5]
+
+        x1 = int((x_c - bw / 2) * w)
+        y1 = int((y_c - bh / 2) * h)
+        x2 = int((x_c + bw / 2) * w)
+        y2 = int((y_c + bh / 2) * h)
+        
+        # 边界裁剪
+        x1 = max(0, min(w, x1))
+        y1 = max(0, min(h, y1))
+        x2 = max(0, min(w, x2))
+        y2 = max(0, min(h, y2))
+        
+        # 填充掩码 (Batch, All_Channels, y1:y2, x1:x2)
+        if x2 > x1 and y2 > y1:
+            mask[b_idx, :, y1:y2, x1:x2] = 1.0
+            
+    return mask
 
 def lr_cosine_policy(base_lr, warmup_length, epochs):
     def _lr_fn(iteration, epoch):
@@ -232,7 +272,6 @@ def denormalize(image_tensor, use_amp=False):
         image_tensor[:, c] = torch.clamp(image_tensor[:, c] * s + m, 0, 1)
 
     return image_tensor
-
 
 def get_image_prior_losses(inputs_jit):
     # COMPUTE total variation regularization loss
@@ -505,8 +544,24 @@ class DeepInversionClass(object):
                     total_loss_scaled.backward()
             else:
                 total_loss.backward()
-            optimizer.step()
+            with torch.no_grad():
+                if inputs.grad is not None:
+                    # A. 实时计算当前 Jitter 后图像的前景掩码
+                    # 注意：必须传入 inputs_jit 对应的 targets_jit，否则位置对不齐
+                    # 掩码形状与 inputs 相同 [B, C, H, W]
+                    fg_mask = generate_fg_mask(inputs, targets_jit)
+                    
+                    # B. 定义背景梯度保留比例 (0.0 = 背景完全不更新, 1.0 = 无操作)
+                    bg_alpha = 0.4  # 建议设为 0 或 0.01 以保持初始化底图不被破坏
+                    
+                    # C. 应用掩码: Grad = Grad * (Mask + (1-Mask)*alpha)
+                    # 前景(Mask=1) -> Grad * 1
+                    # 背景(Mask=0) -> Grad * bg_alpha
+                    inputs.grad.data.mul_(fg_mask + (1 - fg_mask) * bg_alpha)
 
+            # 3. 执行更新
+            optimizer.step()
+  
             with torch.no_grad(): # projected g.d. (must be separated from backprop graph)
                 inputs.clamp_(min=0.0, max=1.0)
             if self.mean_var_clip:
@@ -571,7 +626,12 @@ class DeepInversionClass(object):
                 print("[UNWEIGHTED] inputs_norm", inputs_norm.item())
 
             # Save to disk
-            if (iteration % self.save_every) == 0: 
+            if iteration < 100:
+                do_save = (iteration % 10) == 0
+            else:
+                do_save = (iteration % self.save_every) == 0
+
+            if do_save:
                 im_copy = inputs.clone().detach().cpu()
 
                 # compute metrics (mp, mr, map, mf1) for the updated image on net_verifier
@@ -592,39 +652,34 @@ class DeepInversionClass(object):
                 self.txtwriter.write("Teacher InvImage mPrec: {:.4} mRec: {:.4} mAP: {:.4} mF1: {:.4} \n".format(mPrec, mRec, mAP, mF1))
                 print("[UNWEIGHTED] mAP TEACHER {:.4}".format(mAP))
 
-                # Uncomment to save batch overlayed with teacher/verifier predictions
-                # self.save_image(
-                #     batch_tens =im_boxes_verif,
-                #     loc   = os.path.join(self.path, "iteration_verifier_{}.jpg".format(iteration)),
-                #     halfsize=False
-                # )
-                # self.save_image(
-                #     batch_tens =im_boxes_teach,
-                #     loc   = os.path.join(self.path, "iteration_teacher_{}.jpg".format(iteration)),
-                #     halfsize=False
-                # )
-
-
                 # FP sampling
                 if self.box_sampler and (iteration >= self.box_sampler_warmup) and (iteration<=self.box_sampler_earlyexit):
                     new_targets = predictions_to_coco(teacher_output, im_copy)
                     new_targets = new_targets[new_targets[:,2] > self.box_sampler_conf] # filter targets by confidence threshold
-                    new_targets = torch.index_select(new_targets, dim=1, index=torch.tensor([0,1,3,4,5,6])) # # remove confidence value
+                    new_targets = torch.index_select(new_targets, dim=1, index=torch.tensor([0,1,3,4,5,6], device=new_targets.device)) # # remove confidence value
 
-                    to_add = torch.zeros((len(new_targets),), dtype=torch.long).cuda()
+                    # Ensure tensors used for boolean indexing are on the same device
+                    device = targets.device
+                    new_targets = new_targets.to(device)
+
+                    to_add = torch.zeros((len(new_targets),), dtype=torch.long, device=device)
                     batch_size = im_copy.shape[0]
                     for batchIdx in range(batch_size):
                         _targets = targets[targets[:,0]==batchIdx]
                         _new_targets = new_targets[new_targets[:,0]==batchIdx]
                         if _new_targets.shape[0] > 0:
 
-                            ious = torchvision.ops.box_iou(
-                                xywh2xyxy(_new_targets[:,2:].cuda()),
-                                xywh2xyxy(_targets[:,2:])
-                            )
-                            max_ious, _ = torch.max(ious, dim=1)
-                            _to_add     = (max_ious < self.box_sampler_overlap_iou).long() # condition: if pred has <0.2 overlap w/ any gt box, add to targets
-                            to_add[new_targets[:,0]==batchIdx] += _to_add
+                            # If there are no GT targets for this batch idx, add all new targets
+                            if _targets.shape[0] == 0:
+                                to_add[new_targets[:,0]==batchIdx] += 1
+                            else:
+                                ious = torchvision.ops.box_iou(
+                                    xywh2xyxy(_new_targets[:,2:]),
+                                    xywh2xyxy(_targets[:,2:])
+                                )
+                                max_ious, _ = torch.max(ious, dim=1)
+                                _to_add     = (max_ious < self.box_sampler_overlap_iou).long() # condition: if pred has <0.2 overlap w/ any gt box, add to targets
+                                to_add[new_targets[:,0]==batchIdx] += _to_add
 
                     new_targets = new_targets[to_add.bool()]
                     assert len(new_targets) == to_add.sum().item()
@@ -633,12 +688,13 @@ class DeepInversionClass(object):
                     area_limit_idcs = (areas < self.box_sampler_maxarea) * (areas > self.box_sampler_minarea)
                     new_targets = new_targets[area_limit_idcs.bool()]
                     print("Fp sampling: Adding {} new targets to batch for iteration: {} ".format(len(new_targets), iteration))
-                    targets = torch.cat((targets, new_targets.cuda()), dim=0)
+                    targets = torch.cat((targets, new_targets), dim=0)
 
                 # Save batch overlayed with provided and fp-sampled targets
                 imgs_with_boxes_targets  = draw_targets(im_copy, targets)
-                self.save_image(imgs_with_boxes_targets,os.path.join(self.path, "iteration_targets_{}.jpg".format(iteration)), halfsize=False)
-
+                # self.save_image(imgs_with_boxes_targets,os.path.join(self.path, "iteration_targets_{}.jpg".format(iteration)), halfsize=False)
+                _, _, _, _, generatedImages_with_boxes_verif, _ = inference(self.net_verifier, im_copy, targets, self.nms_params)
+                self.save_image(generatedImages_with_boxes_verif, os.path.join(self.path, "inverted_{}_with_preds.jpg".format(iteration)), halfsize=False)
                 del im_copy, im_boxes_teach, im_boxes_verif, imgs_with_boxes_targets
                 torch.cuda.empty_cache()
 

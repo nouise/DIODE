@@ -47,165 +47,174 @@ def run(args):
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
     net = load_model(cfg='/data1/home/ypliu/DIODE/knowledge_distillation/yolov3-master/cfg/yolov3-spp-voc.cfg', weights='/data1/home/ypliu/DIODE/knowledge_distillation/yolov3-master/runs/exp/weights/last.pt').to(device)
     net_verifier = load_model(cfg='/data1/home/ypliu/DIODE/knowledge_distillation/yolov3-master/cfg/yolov3-spp-voc.cfg', weights='/data1/home/ypliu/DIODE/knowledge_distillation/yolov3-master/runs/exp/weights/last.pt').to(device)
-    imgs, targets, imgspaths = load_batch(args.train_txt_path, args.bs, args.resolution[0], args.shuffle)
     net.eval() 
     net_verifier.eval()
+    dataloader = load_batch(args.train_txt_path, args.bs, args.resolution[0], args.shuffle)
+    base_path = args.path
 
-    args.start_noise = True
+    for batch_idx, (imgs, targets, imgspaths, _) in enumerate(dataloader):
+        imgs = imgs.float() / 255.0
+        args.bs = imgs.shape[0]
+        args.path = os.path.join(base_path, "batch_{:06d}".format(batch_idx))
 
-    parameters = dict()
-    # Data augmentation params
-    parameters["random_label"] = False
-    parameters["start_noise"] = True
-    parameters["do_flip"] = args.do_flip
-    parameters["jitter"] = args.jitter
-    parameters["rand_brightness"] = args.rand_brightness 
-    parameters["rand_contrast"]   = args.rand_contrast
-    parameters["random_erase"]    = args.random_erase
-    parameters["mean_var_clip"] = args.mean_var_clip
-    # Other params
-    parameters["resolution"] = args.resolution
-    parameters["bs"] = args.bs 
-    parameters["iterations"] = args.iterations
-    parameters["save_every"] = args.save_every
-    parameters["display_every"] = args.display_every
-    parameters["beta1"] = args.beta1
-    parameters["beta2"] = args.beta2
-    parameters["nms_params"] = args.nms_params
-    parameters["cosine_layer_decay"] = args.cosine_layer_decay
-    parameters["min_layers"] = args.min_layers
-    parameters["num_layers"] = args.num_layers
-    parameters["p_norm"] = args.p_norm
-    parameters["alpha_mean"] = args.alpha_mean
-    parameters["alpha_var"]  = args.alpha_var
-    parameters["alpha_ssim"] = args.alpha_ssim
+        args.start_noise = True
 
-    # Bounding box samper
-    parameters["box_sampler"]        = args.box_sampler
-    parameters["box_sampler_warmup"] = args.box_sampler_warmup
-    parameters["box_sampler_conf"]   = args.box_sampler_conf
-    parameters["box_sampler_overlap_iou"] = args.box_sampler_overlap_iou
-    parameters["box_sampler_minarea"]= args.box_sampler_minarea
-    parameters["box_sampler_maxarea"]= args.box_sampler_maxarea
-    parameters["box_sampler_earlyexit"] = args.box_sampler_earlyexit
+        parameters = dict()
+        # Data augmentation params
+        parameters["random_label"] = False
+        parameters["start_noise"] = True
+        parameters["do_flip"] = args.do_flip
+        parameters["jitter"] = args.jitter
+        parameters["rand_brightness"] = args.rand_brightness 
+        parameters["rand_contrast"]   = args.rand_contrast
+        parameters["random_erase"]    = args.random_erase
+        parameters["mean_var_clip"] = args.mean_var_clip
+        # Other params
+        parameters["resolution"] = args.resolution
+        parameters["bs"] = args.bs 
+        parameters["iterations"] = args.iterations
+        parameters["save_every"] = args.save_every
+        parameters["display_every"] = args.display_every
+        parameters["beta1"] = args.beta1
+        parameters["beta2"] = args.beta2
+        parameters["nms_params"] = args.nms_params
+        parameters["cosine_layer_decay"] = args.cosine_layer_decay
+        parameters["min_layers"] = args.min_layers
+        parameters["num_layers"] = args.num_layers
+        parameters["p_norm"] = args.p_norm
+        parameters["alpha_mean"] = args.alpha_mean
+        parameters["alpha_var"]  = args.alpha_var
+        parameters["alpha_ssim"] = args.alpha_ssim
 
-    # criterion = nn.MSELoss()
-    # criterion = nn.L1Loss()
-    # criterion = functools.partial(Triterion, loss_weights={"bbox":0.0, "cov":1.0, "orient":0.0})
-    # criterion = Triterion(loss_weights={"bbox":1.0, "cov":1.0, "orient":0.0})  
+        # Bounding box samper
+        parameters["box_sampler"]        = args.box_sampler
+        parameters["box_sampler_warmup"] = args.box_sampler_warmup
+        parameters["box_sampler_conf"]   = args.box_sampler_conf
+        parameters["box_sampler_overlap_iou"] = args.box_sampler_overlap_iou
+        parameters["box_sampler_minarea"]= args.box_sampler_minarea
+        parameters["box_sampler_maxarea"]= args.box_sampler_maxarea
+        parameters["box_sampler_earlyexit"] = args.box_sampler_earlyexit
 
-    coefficients = dict()
-    coefficients["r_feature"] = args.r_feature
-    coefficients["tv_l1"] = args.tv_l1
-    coefficients["tv_l2"] = args.tv_l2
-    coefficients["wd"] = args.wd
-    coefficients["lr"] = args.lr
-    coefficients["min_lr"] = args.min_lr
-    coefficients["first_bn_coef"] = args.first_bn_coef
-    coefficients["main_loss_multiplier"] = args.main_loss_multiplier
-    coefficients["alpha_img_stats"] = args.alpha_img_stats
+        # criterion = nn.MSELoss()
+        # criterion = nn.L1Loss()
+        # criterion = functools.partial(Triterion, loss_weights={"bbox":0.0, "cov":1.0, "orient":0.0})
+        # criterion = Triterion(loss_weights={"bbox":1.0, "cov":1.0, "orient":0.0})  
 
-    network_output_function = lambda x: x[1] # When in .eval() mode, DarkNet returns (inference_output, training_output). 
+        coefficients = dict()
+        coefficients["r_feature"] = args.r_feature
+        coefficients["tv_l1"] = args.tv_l1
+        coefficients["tv_l2"] = args.tv_l2
+        coefficients["wd"] = args.wd
+        coefficients["lr"] = args.lr
+        coefficients["min_lr"] = args.min_lr
+        coefficients["first_bn_coef"] = args.first_bn_coef
+        coefficients["main_loss_multiplier"] = args.main_loss_multiplier
+        coefficients["alpha_img_stats"] = args.alpha_img_stats
 
-    DeepInversionEngine = DeepInversionClass(net_teacher=net,
-                                             net_verifier=net_verifier,
-                                             path=args.path,
-                                             logger_big=None,
-                                             parameters=parameters,
-                                             criterion=criterion,
-                                             use_amp=args.fp16,
-                                             coefficients = coefficients,
-                                             network_output_function = network_output_function)
+        network_output_function = lambda x: x[1] # When in .eval() mode, DarkNet returns (inference_output, training_output). 
 
-    # initialize inputs
-    if args.init_chkpt.endswith(".pt"):
-        initchkpt = torch.load(args.init_chkpt, map_location=torch.device("cpu"))
-        init = initchkpt["images"]
-        imgs = initchkpt["origimages"]
-        targets = initchkpt["targets"]
-        imgspaths = initchkpt["imgspaths"]
-        init, imgs, imgspaths = init[0:args.bs], imgs[0:args.bs], imgspaths[0:args.bs]
-        targets = targets[targets[:,0]<args.bs]
-        if init.shape[2] != args.resolution[0]:
-            init = F.interpolate(init, size=(args.resolution[0], args.resolution[1]))
-            imgs = F.interpolate(imgs, size=(args.resolution[0], args.resolution[1]))
-    else:
-        init = torch.randn((args.bs, 3, args.resolution[0], args.resolution[1]), dtype=torch.float)
-        init = torch.clamp(init, min=0.0, max=1.0)
-        init = (args.init_scale * init) + args.init_bias
-        init = (args.real_mixin_alpha)*imgs + (1.0-args.real_mixin_alpha)*init
-    DeepInversionEngine.save_image(init, os.path.join(DeepInversionEngine.path, "initialization.jpg"), halfsize=True)
+        DeepInversionEngine = DeepInversionClass(net_teacher=net,
+                                                 net_verifier=net_verifier,
+                                                 path=args.path,
+                                                 logger_big=None,
+                                                 parameters=parameters,
+                                                 criterion=criterion,
+                                                 use_amp=args.fp16,
+                                                 coefficients = coefficients,
+                                                 network_output_function = network_output_function)
 
-    init_with_boxes = draw_targets(init, targets)
-    DeepInversionEngine.save_image(init_with_boxes, os.path.join(DeepInversionEngine.path, "init_with_boxes.jpg"))
-    mPrec, mRec, mAP, mF1, init_with_boxes_verif, _ = inference(net_verifier, init, targets, args.nms_params)
-    DeepInversionEngine.save_image(init_with_boxes_verif, os.path.join(DeepInversionEngine.path, "init_with_boxes_verifier.jpg"))
-    _init_metrics_str = "Initialization mAP: {} | mF1: {} | mPrec: {} | mRec: {}".format(mAP, mF1, mPrec, mRec)
-    DeepInversionEngine.txtwriter.write(_init_metrics_str+"\n")
-    print(_init_metrics_str)
+        # initialize inputs
+        if args.init_chkpt.endswith(".pt"):
+            initchkpt = torch.load(args.init_chkpt, map_location=torch.device("cpu"))
+            init = initchkpt["images"]
+            imgs = initchkpt["origimages"]
+            targets = initchkpt["targets"]
+            imgspaths = initchkpt["imgspaths"]
+            init, imgs, imgspaths = init[0:args.bs], imgs[0:args.bs], imgspaths[0:args.bs]
+            targets = targets[targets[:,0]<args.bs]
+            if init.shape[2] != args.resolution[0]:
+                init = F.interpolate(init, size=(args.resolution[0], args.resolution[1]))
+                imgs = F.interpolate(imgs, size=(args.resolution[0], args.resolution[1]))
+        else:
+            init = torch.randn((args.bs, 3, args.resolution[0], args.resolution[1]), dtype=torch.float)
+            init = torch.clamp(init, min=0.0, max=1.0)
+            init = (args.init_scale * init) + args.init_bias
+            init = (args.real_mixin_alpha)*imgs + (1.0-args.real_mixin_alpha)*init
+        DeepInversionEngine.save_image(init, os.path.join(DeepInversionEngine.path, "initialization.jpg"), halfsize=True)
 
-    # Save the input image to disk
-    imgs_with_boxes_targets  = draw_targets(imgs, targets)
-    DeepInversionEngine.save_image(imgs_with_boxes_targets, os.path.join(DeepInversionEngine.path, "real_image_targets.jpg"), halfsize=False)
+        init_with_boxes = draw_targets(init, targets)
+        DeepInversionEngine.save_image(init_with_boxes, os.path.join(DeepInversionEngine.path, "init_with_boxes.jpg"))
+        mPrec, mRec, mAP, mF1, init_with_boxes_verif, _ = inference(net_verifier, init, targets, args.nms_params)
+        DeepInversionEngine.save_image(init_with_boxes_verif, os.path.join(DeepInversionEngine.path, "init_with_boxes_verifier.jpg"))
+        _init_metrics_str = "Initialization mAP: {} | mF1: {} | mPrec: {} | mRec: {}".format(mAP, mF1, mPrec, mRec)
+        DeepInversionEngine.txtwriter.write(_init_metrics_str+"\n")
+        print(_init_metrics_str)
 
-    # Inference on real image
-    mPrec, mRec, mAP, mF1, imgs_with_boxes_verif, _ = inference(net_verifier, imgs, targets, args.nms_params)
-    DeepInversionEngine.txtwriter.write("Verifier RealImage mPrec: {:.4} mRec: {:.4} mAP: {:.4} mF1: {:.4} \n".format(mPrec, mRec, mAP, mF1))
-    mPrec, mRec, mAP, mF1, imgs_with_boxes_teach, _ = inference(net, imgs, targets, args.nms_params)
-    DeepInversionEngine.txtwriter.write("Teacher RealImage mPrec: {:.4} mRec: {:.4} mAP: {:.4} mF1: {:.4} \n".format(mPrec, mRec, mAP, mF1))
-    DeepInversionEngine.save_image(imgs_with_boxes_verif, os.path.join(DeepInversionEngine.path, "real_image_verifier.jpg"), halfsize=False)
-    DeepInversionEngine.save_image(imgs_with_boxes_teach, os.path.join(DeepInversionEngine.path, "real_image_teacher.jpg"), halfsize=False)
+        # Save the input image to disk
+        imgs_with_boxes_targets  = draw_targets(imgs, targets)
+        DeepInversionEngine.save_image(imgs_with_boxes_targets, os.path.join(DeepInversionEngine.path, "real_image_targets.jpg"), halfsize=False)
 
-    assert imgs.shape[0] == parameters["bs"], "Batchsize of data {} doesn't match batchsize specified in cli {}".format(imgs.shape[0], parameters["bs"])
+        # Inference on real image
+        mPrec, mRec, mAP, mF1, imgs_with_boxes_verif, _ = inference(net_verifier, imgs, targets, args.nms_params)
+        DeepInversionEngine.txtwriter.write("Verifier RealImage mPrec: {:.4} mRec: {:.4} mAP: {:.4} mF1: {:.4} \n".format(mPrec, mRec, mAP, mF1))
+        mPrec, mRec, mAP, mF1, imgs_with_boxes_teach, _ = inference(net, imgs, targets, args.nms_params)
+        DeepInversionEngine.txtwriter.write("Teacher RealImage mPrec: {:.4} mRec: {:.4} mAP: {:.4} mF1: {:.4} \n".format(mPrec, mRec, mAP, mF1))
+        DeepInversionEngine.save_image(imgs_with_boxes_verif, os.path.join(DeepInversionEngine.path, "real_image_verifier.jpg"), halfsize=False)
+        DeepInversionEngine.save_image(imgs_with_boxes_teach, os.path.join(DeepInversionEngine.path, "real_image_teacher.jpg"), halfsize=False)
 
-    # Used cached stats
-    if args.cache_batch_stats:
-        DeepInversionEngine.cache_batch_stats(imgs.clone().detach().cuda())
-        print("Overwriting cached_mean and cached_var with batch stats of real data") 
-        DeepInversionEngine.txtwriter.write("[CACHE_BATCH_STATS] Overwriting cached_mean and cached_var with batch stats of real data\n")
+        assert imgs.shape[0] == parameters["bs"], "Batchsize of data {} doesn't match batchsize specified in cli {}".format(imgs.shape[0], parameters["bs"])
 
-    # Losses on real data batch
-    from deepinversion_yolo import get_image_prior_losses
-    with torch.no_grad():
-        _real_tv_l1, _real_tv_l2 = get_image_prior_losses(imgs.cuda())
-        DeepInversionEngine.net_teacher.eval()
-        _real_outputs = DeepInversionEngine.net_teacher(imgs.cuda())
-        _real_outputs = DeepInversionEngine.network_output_function(_real_outputs)
-        _real_task_loss, _ = DeepInversionEngine.criterion(_real_outputs, targets.cuda(), DeepInversionEngine.net_teacher)
-        numLayers = len(DeepInversionEngine.loss_r_feature_layers) if args.num_layers==-1 else args.num_layers
-        _real_di_loss = sum([mod.r_feature for mod in DeepInversionEngine.loss_r_feature_layers[0:numLayers]])
+        # Used cached stats
+        if args.cache_batch_stats:
+            DeepInversionEngine.cache_batch_stats(imgs.clone().detach().cuda())
+            print("Overwriting cached_mean and cached_var with batch stats of real data") 
+            DeepInversionEngine.txtwriter.write("[CACHE_BATCH_STATS] Overwriting cached_mean and cached_var with batch stats of real data\n")
 
-    _real_loss_str = "Real batch losses: tv L1: {:.4f} tv L2: {:.4f} task: {:.4f} di: {:.4f}".format(_real_tv_l1.item(), _real_tv_l2.item(), _real_task_loss.item(), _real_di_loss.item())
-    print(_real_loss_str)
-    DeepInversionEngine.txtwriter.write(_real_loss_str+"\n")
-    del _real_tv_l1, _real_tv_l2, _real_outputs, _real_task_loss, _real_di_loss
+        # Losses on real data batch
+        from deepinversion_yolo import get_image_prior_losses
+        with torch.no_grad():
+            _real_tv_l1, _real_tv_l2 = get_image_prior_losses(imgs.cuda())
+            DeepInversionEngine.net_teacher.eval()
+            _real_outputs = DeepInversionEngine.net_teacher(imgs.cuda())
+            _real_outputs = DeepInversionEngine.network_output_function(_real_outputs)
+            _real_task_loss, _ = DeepInversionEngine.criterion(_real_outputs, targets.cuda(), DeepInversionEngine.net_teacher)
+            numLayers = len(DeepInversionEngine.loss_r_feature_layers) if args.num_layers==-1 else args.num_layers
+            _real_di_loss = sum([mod.r_feature for mod in DeepInversionEngine.loss_r_feature_layers[0:numLayers]])
 
-    generatedImages, targets = DeepInversionEngine.generate_batch(targets, init)
-    generatedImages_with_targets = draw_targets(generatedImages, targets)
-    DeepInversionEngine.save_image(generatedImages_with_targets, os.path.join(DeepInversionEngine.path, "inverted_with_targets.jpg"), halfsize=False)
-    mPrec, mRec, mAP, mF1, generatedImages_with_boxes_verif, _ = inference(net_verifier, generatedImages, targets, args.nms_params)
-    DeepInversionEngine.save_image(generatedImages_with_boxes_verif, os.path.join(DeepInversionEngine.path, "inverted_with_preds.jpg"), halfsize=False)
-    DeepInversionEngine.txtwriter.write("Verifier GeneratedImage mPrec: {:.4} mRec: {:.4} mAP: {:.4} mF1: {:.4} \n".format(mPrec, mRec, mAP, mF1))
+        _real_loss_str = "Real batch losses: tv L1: {:.4f} tv L2: {:.4f} task: {:.4f} di: {:.4f}".format(_real_tv_l1.item(), _real_tv_l2.item(), _real_task_loss.item(), _real_di_loss.item())
+        print(_real_loss_str)
+        DeepInversionEngine.txtwriter.write(_real_loss_str+"\n")
+        del _real_tv_l1, _real_tv_l2, _real_outputs, _real_task_loss, _real_di_loss
 
-    # Store image checkpoint (useful for multi-scale generation)
-    chkpt = {"images":generatedImages, "targets":targets, "origimages": imgs, "imgspaths":imgspaths}
-    torch.save(chkpt, os.path.join(args.path, "chkpt.pt"))
+        generatedImages, targets = DeepInversionEngine.generate_batch(targets, init)
+        generatedImages_with_targets = draw_targets(generatedImages, targets)
+        DeepInversionEngine.save_image(generatedImages_with_targets, os.path.join(DeepInversionEngine.path, "inverted_with_targets.jpg"), halfsize=False)
+        mPrec, mRec, mAP, mF1, generatedImages_with_boxes_verif, _ = inference(net_verifier, generatedImages, targets, args.nms_params)
+        DeepInversionEngine.save_image(generatedImages_with_boxes_verif, os.path.join(DeepInversionEngine.path, "inverted_with_preds.jpg"), halfsize=False)
+        DeepInversionEngine.txtwriter.write("Verifier GeneratedImage mPrec: {:.4} mRec: {:.4} mAP: {:.4} mF1: {:.4} \n".format(mPrec, mRec, mAP, mF1))
 
-    # Store generatedImages in coco format
-    if args.save_coco:
-        os.makedirs(os.path.join(args.path, "coco", "images", "train2014"))
-        os.makedirs(os.path.join(args.path, "coco", "labels", "train2014"))
-        pilImages, cocoTargets = convert_to_coco(generatedImages, targets)
-        for pilim, cocotarget, imgpath in zip(pilImages, cocoTargets, imgspaths):
-            imgname = os.path.basename(imgpath) # get filename
-            imgname = os.path.splitext(imgname)[0] # remove .jpg/.png extension
-            pilim.save(os.path.join(args.path, "coco", "images", "train2014", imgname+".png"))
-            with open(os.path.join(args.path,"coco","labels","train2014",imgname+".txt"),"wt") as f:
-                if len(cocotarget)>0:
-                    f.write(''.join(cocotarget).rstrip('\n'))
-    # Save the args
-    with open(os.path.join(args.path, "args.txt"), "wt") as f:
-        f.write(str(args)+"\n")
+        # Store image checkpoint (useful for multi-scale generation)
+        chkpt = {"images":generatedImages, "targets":targets, "origimages": imgs, "imgspaths":imgspaths}
+        torch.save(chkpt, os.path.join(args.path, "chkpt.pt"))
+
+        # Store generatedImages in coco format
+        if args.save_coco:
+            coco_root = os.path.join(base_path, "coco")
+            os.makedirs(os.path.join(coco_root, "images", "train2014"), exist_ok=True)
+            os.makedirs(os.path.join(coco_root, "labels", "train2014"), exist_ok=True)
+            pilImages, cocoTargets = convert_to_coco(generatedImages, targets)
+            for pilim, cocotarget, imgpath in zip(pilImages, cocoTargets, imgspaths):
+                imgname = os.path.basename(imgpath) # get filename
+                imgname = os.path.splitext(imgname)[0] # remove .jpg/.png extension
+                pilim.save(os.path.join(coco_root, "images", "train2014", imgname+".png"))
+                with open(os.path.join(coco_root, "labels", "train2014", imgname+".txt"),"wt") as f:
+                    if len(cocotarget)>0:
+                        f.write(''.join(cocotarget).rstrip('\n'))
+        # Save the args
+        with open(os.path.join(args.path, "args.txt"), "wt") as f:
+            f.write(str(args)+"\n")
+
+    args.path = base_path
 
 def main():
     parser = argparse.ArgumentParser()
