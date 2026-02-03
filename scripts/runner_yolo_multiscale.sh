@@ -14,7 +14,7 @@
 
 now=$(date +"day_%m_%d_%Y_time_%H_%M_%S")
 echo "CURDATETIME: ${now}"
-export CUDA_VISIBLE_DEVICES="5"
+export CUDA_VISIBLE_DEVICES="7"
 # source scripts/auto_gpu.sh
 echo "${CUDA_VISIBLE_DEVICES}"
 
@@ -57,7 +57,7 @@ rootlocation="/data1/home/ypliu/DIODE/syn_data_result"
 # --seeds="0,0,23456" \
 # --display_every=100 --init_scale=1.0 --init_bias=0.0 --nms_conf_thres=0.1 --alpha-ssim=0.0 --save-coco --real_mixin_alpha=1.0
 #fintune paramterts mores
-python -u main_yolo_v2.py --resolution=512 --bs=16 \
+python -u main_yolo_v2.py --resolution=512 --bs=12 \
 --jitter=40 --do_flip --rand_brightness --rand_contrast --random_erase \
 --path="${rootlocation}/${now}_res512_finetune" \
 --train_txt_path="/data1/home/ypliu/DIODE/random_328.txt" \

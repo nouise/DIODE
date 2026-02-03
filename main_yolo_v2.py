@@ -24,6 +24,7 @@ import torch.utils.data
 from torchvision import datasets, transforms
 
 import argparse
+import gc
 import numpy as np
 import os, sys 
 import functools
@@ -56,6 +57,19 @@ def run(args):
         imgs = imgs.float() / 255.0
         args.bs = imgs.shape[0]
         args.path = os.path.join(base_path, "batch_{:06d}".format(batch_idx))
+        # if batch_idx>=22 or batch_idx<12:
+        
+        # Only run when batch_idx is in BOTH ranges:[l_min, r_min)
+        # l_min/r_min can be optionally provided as args.l_min/args.r_min (if set elsewhere).
+        l_min = getattr(args, "l_min", 17)
+        r_min = getattr(args, "r_min", 22)
+
+        if not (l_min <= batch_idx < r_min):
+            print(f"has processed batch {batch_idx}, just skip (valid: [{l_min},{r_min}))")
+            continue
+        # if batch_idx<17 or batch_idx>=22:
+        #     print("has processed batch {},just skip".format(batch_idx))
+        #     continue
 
         args.start_noise = True
 
@@ -213,6 +227,18 @@ def run(args):
         # Save the args
         with open(os.path.join(args.path, "args.txt"), "wt") as f:
             f.write(str(args)+"\n")
+
+        # Explicit cleanup per batch
+        DeepInversionEngine.close()
+        del DeepInversionEngine
+        del imgs, targets, imgspaths, init
+        del init_with_boxes, init_with_boxes_verif
+        del imgs_with_boxes_targets, imgs_with_boxes_verif, imgs_with_boxes_teach
+        del generatedImages, generatedImages_with_targets, generatedImages_with_boxes_verif
+        del mPrec, mRec, mAP, mF1, _init_metrics_str
+        del pilImages,cocoTargets, chkpt
+        gc.collect()
+        torch.cuda.empty_cache()
 
     args.path = base_path
 
