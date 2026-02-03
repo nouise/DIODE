@@ -24,6 +24,7 @@ import torch.utils.data
 from torchvision import datasets, transforms
 
 import argparse
+import gc
 import numpy as np
 import os, sys 
 import functools
@@ -213,6 +214,17 @@ def run(args):
         # Save the args
         with open(os.path.join(args.path, "args.txt"), "wt") as f:
             f.write(str(args)+"\n")
+
+        # Explicit cleanup per batch
+        DeepInversionEngine.close()
+        del DeepInversionEngine
+        del imgs, targets, imgspaths, init
+        del init_with_boxes, init_with_boxes_verif
+        del imgs_with_boxes_targets, imgs_with_boxes_verif, imgs_with_boxes_teach
+        del generatedImages, generatedImages_with_targets, generatedImages_with_boxes_verif
+        del mPrec, mRec, mAP, mF1, _init_metrics_str
+        gc.collect()
+        torch.cuda.empty_cache()
 
     args.path = base_path
 

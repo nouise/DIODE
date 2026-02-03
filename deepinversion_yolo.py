@@ -415,8 +415,30 @@ class DeepInversionClass(object):
     
     def __del__(self):
         # destructor
-        self.txtwriter.close()
-        self.writer.close()
+        self.close()
+
+    def close(self):
+        try:
+            if hasattr(self, "loss_r_feature_layers") and self.loss_r_feature_layers:
+                for hook in self.loss_r_feature_layers:
+                    hook.close()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "ssim_hook") and self.ssim_hook:
+                self.ssim_hook.close()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "txtwriter") and self.txtwriter:
+                self.txtwriter.close()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "writer") and self.writer:
+                self.writer.close()
+        except Exception:
+            pass
 
     def get_images(self, targets, init):
 
@@ -695,12 +717,23 @@ class DeepInversionClass(object):
                 # self.save_image(imgs_with_boxes_targets,os.path.join(self.path, "iteration_targets_{}.jpg".format(iteration)), halfsize=False)
                 _, _, _, _, generatedImages_with_boxes_verif, _ = inference(self.net_verifier, im_copy, targets, self.nms_params)
                 self.save_image(generatedImages_with_boxes_verif, os.path.join(self.path, "inverted_{}_with_preds.jpg".format(iteration)), halfsize=False)
-                del im_copy, im_boxes_teach, im_boxes_verif, imgs_with_boxes_targets
+                del im_copy, im_boxes_teach, im_boxes_verif, imgs_with_boxes_targets, teacher_output
                 torch.cuda.empty_cache()
 
             if self.box_sampler and iteration>=self.box_sampler_earlyexit:
                 print("early exit on {} iteration".format(iteration))
                 break
+
+            # release per-iteration tensors to reduce GPU memory pressure
+            if self.rand_brightness:
+                del rand_brightness
+            if self.rand_contrast:
+                del rand_contrast
+            if self.random_erase:
+                del masks
+            del outputs, inputs_jit, targets_jit
+            del task_loss_copy, prior_loss_var_l1_copy, prior_loss_var_l2_copy
+            del loss_r_feature_copy, loss_r_feature_first_copy
 
         # Save tracked mean/std
         tracker_dict = {
@@ -712,7 +745,11 @@ class DeepInversionClass(object):
         }
         torch.save(tracker_dict, os.path.join(self.path, "tracker.data"))
 
-        return inputs.clone().detach().cpu(), targets.clone().detach().cpu()
+        final_inputs = inputs.clone().detach().cpu()
+        final_targets = targets.clone().detach().cpu()
+        del inputs, targets
+        torch.cuda.empty_cache()
+        return final_inputs, final_targets
 
     def save_image(self, batch_tens, loc, halfsize=True): 
         """
