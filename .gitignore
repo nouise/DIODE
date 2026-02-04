@@ -12,3 +12,6 @@ knowledge_distillation/yolov3-master/runs_pretrained_backbone
 result/
 syn_data_result/
 diode_results_74/
+augmented_data/
+syn_data_result_test/
+syn_data_result_v4/

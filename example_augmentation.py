@@ -190,7 +190,7 @@ def main():
     print("="*70)
     
     # Configuration
-    IMAGE_LIST_FILE = "random_328.txt"  # Path to text file with image paths
+    IMAGE_LIST_FILE = "/data1/home/ypliu/DIODE/augmented_data/selected_voc_train_164*4.txt"  # Path to text file with image paths
     OUTPUT_DIR = "augmented_data"       # Output directory for augmented data
     
     # Check if image list file exists
@@ -221,21 +221,21 @@ def main():
         example_mosaic_augmentation(
             image_list=image_list,
             output_dir=OUTPUT_DIR,
-            num_samples=10
+            num_samples=164
         )
         
-        # Example 2: Copy-Paste Augmentation
-        example_copypaste_augmentation(
-            image_list=image_list,
-            output_dir=OUTPUT_DIR,
-            num_samples=10
-        )
+        # # Example 2: Copy-Paste Augmentation
+        # example_copypaste_augmentation(
+        #     image_list=image_list,
+        #     output_dir=OUTPUT_DIR,
+        #     num_samples=10
+        # )
         
-        # Example 3: Synthetic Labels
-        example_synthetic_labels(
-            output_dir=OUTPUT_DIR,
-            num_samples=100
-        )
+        # # Example 3: Synthetic Labels
+        # example_synthetic_labels(
+        #     output_dir=OUTPUT_DIR,
+        #     num_samples=100
+        # )
         
         print("\n" + "="*70)
         print("All examples completed successfully!")

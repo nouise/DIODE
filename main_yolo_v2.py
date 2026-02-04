@@ -61,9 +61,10 @@ def run(args):
         
         # Only run when batch_idx is in BOTH ranges:[l_min, r_min)
         # l_min/r_min can be optionally provided as args.l_min/args.r_min (if set elsewhere).
-        l_min = getattr(args, "l_min", 17)
-        r_min = getattr(args, "r_min", 22)
-
+        # l_min = getattr(args, "l_min", 17)
+        # r_min = getattr(args, "r_min", 22)
+        l_min = getattr(args, "l_min", 0)
+        r_min = getattr(args, "r_min", 1000)
         if not (l_min <= batch_idx < r_min):
             print(f"has processed batch {batch_idx}, just skip (valid: [{l_min},{r_min}))")
             continue

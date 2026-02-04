@@ -574,7 +574,7 @@ class DeepInversionClass(object):
                     fg_mask = generate_fg_mask(inputs, targets_jit)
                     
                     # B. 定义背景梯度保留比例 (0.0 = 背景完全不更新, 1.0 = 无操作)
-                    bg_alpha = 0.4  # 建议设为 0 或 0.01 以保持初始化底图不被破坏
+                    bg_alpha = 0.0005  # 建议设为 0 或 0.01 以保持初始化底图不被破坏
                     
                     # C. 应用掩码: Grad = Grad * (Mask + (1-Mask)*alpha)
                     # 前景(Mask=1) -> Grad * 1

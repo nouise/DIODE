@@ -14,7 +14,7 @@
 
 now=$(date +"day_%m_%d_%Y_time_%H_%M_%S")
 echo "CURDATETIME: ${now}"
-export CUDA_VISIBLE_DEVICES="7"
+export CUDA_VISIBLE_DEVICES="4"
 # source scripts/auto_gpu.sh
 echo "${CUDA_VISIBLE_DEVICES}"
 
@@ -22,7 +22,10 @@ echo "${CUDA_VISIBLE_DEVICES}"
 # This command generates 128 images of resolution 512x512
 ##############################################################
 
-rootlocation="/data1/home/ypliu/DIODE/syn_data_result"
+rootlocation="/data1/home/ypliu/DIODE/syn_data_result_test"
+# train_path="/data1/home/ypliu/DIODE/random_328.txt"
+# train_path="/data1/home/ypliu/DIODE/augmented_data/random_164.txt"
+train_path="/data1/home/ypliu/DIODE/augmented_data/mosaic_164.txt"
 # python -u main_yolo_v2.py --resolution=512 --bs=4 \
 # --jitter=20 --do_flip --rand_brightness --rand_contrast --random_erase \
 # --path="${rootlocation}/${now}_res512" \
@@ -57,24 +60,24 @@ rootlocation="/data1/home/ypliu/DIODE/syn_data_result"
 # --seeds="0,0,23456" \
 # --display_every=100 --init_scale=1.0 --init_bias=0.0 --nms_conf_thres=0.1 --alpha-ssim=0.0 --save-coco --real_mixin_alpha=1.0
 #fintune paramterts mores
-python -u main_yolo_v2.py --resolution=512 --bs=12 \
+python -u main_yolo_v2.py --resolution=512 --bs=16 \
 --jitter=40 --do_flip --rand_brightness --rand_contrast --random_erase \
 --path="${rootlocation}/${now}_res512_finetune" \
---train_txt_path="/data1/home/ypliu/DIODE/random_328.txt" \
+--train_txt_path="${train_path}" \
 --iterations=1500 \
 --r_feature=0.01 --p_norm=2 --alpha-mean=1.0 --alpha-var=1.0 --num_layers=51 \
 --first_bn_coef=0.0 \
 --main_loss_multiplier=1.0 \
 --alpha_img_stats=0.0 \
---tv_l1=0.0 \
+--tv_l1=75.0 \
 --tv_l2=0.0 \
---lr=0.02 --min_lr=0.0005 \
+--lr=0.01 --min_lr=0.0005 \
 --wd=0.0 \
---save_every=100 \
+--save_every=200 \
 --seeds="0,0,23456" \
 --display_every=100 --init_scale=1.0 --init_bias=0.0 --nms_conf_thres=0.1 --alpha-ssim=0.0 --save-coco --real_mixin_alpha=1.0 \
---box-sampler --box-sampler-warmup=300 --box-sampler-conf=0.3 \
---box-sampler-overlap-iou=0.35 --box-sampler-minarea=0.01 --box-sampler-maxarea=0.85 --box-sampler-earlyexit=2800
+--box-sampler --box-sampler-warmup=500 --box-sampler-conf=0.3 \
+--box-sampler-overlap-iou=0.35 --box-sampler-minarea=0.001 --box-sampler-maxarea=0.85 --box-sampler-earlyexit=2800
 ##############################################################
 # to enable fp-sampling add the following args to above:
 # --box-sampler --box-sampler-warmup=800 --box-sampler-conf=0.2 \
